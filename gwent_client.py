@@ -39,8 +39,13 @@ login_status_msg = "Enter credentials to connect."
 
 my_player_id = None
 
-my_deck_selection = ["Geralt", "Ciri", "Vesemir", "Triss", "Yennefer", "Catapult", "Trebuchet", "Zoltan", "Keira",
-                     "Ballista", "Vernon Roche", "John Natalis"]
+my_deck_selection = [
+    "Mysterious Elf", "Sigismund Dijkstra",
+    "Yennefer", "Dun Banner Medic",
+    "Commander's Horn", "Commander's Horn",
+    "Catapult", "Catapult",
+    "Decoy", "Geralt", "Ciri", "Zoltan"
+]
 my_hand = []
 
 current_board_state = None
