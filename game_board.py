@@ -5,11 +5,12 @@ from cards import CARDS
 
 class GameBoard:
     def __init__(self):
+        # Game state. When the game updates, this dictionary is sent to the clients with JSON.
         self.players = {
             1: {"deck": [], "hand": [], "board": {"melee": [], "ranged": [], "siege": []}, "passed": False,
-                "rounds_won": 0, "horns": [], "graveyard": []},
+                "rounds_won": 0, "horns": [], "graveyard": [], "redraws_left": 2},
             2: {"deck": [], "hand": [], "board": {"melee": [], "ranged": [], "siege": []}, "passed": False,
-                "rounds_won": 0, "horns": [], "graveyard": []}
+                "rounds_won": 0, "horns": [], "graveyard": [], "redraws_left": 2}
         }
         self.current_turn = random.choice([1, 2])
         self.round_number = 1
@@ -25,13 +26,17 @@ class GameBoard:
 
     def redraw_card(self, player_id, card_name):
         """Swaps a card from the hand with a random card from the deck."""
+        if self.players[player_id]["redraws_left"] <= 0:
+            return False
         if card_name in self.players[player_id]["hand"] and len(self.players[player_id]["deck"]) > 0:
             self.players[player_id]["hand"].remove(card_name)
             new_card = self.players[player_id]["deck"].pop()
             self.players[player_id]["hand"].append(new_card)
             self.players[player_id]["deck"].append(card_name)
             random.shuffle(self.players[player_id]["deck"])
+            self.players[player_id]["redraws_left"] -= 1
             return True
+
         return False
 
     def load_deck(self, player_id, deck_list):
@@ -48,6 +53,7 @@ class GameBoard:
         card_data = CARDS[card_name]
         is_hero = card_data.get("hero", False)
 
+        # If it's a hero, we return its base power instantly and skip the rest.
         if is_hero:
             return card_data["power"]
 
@@ -59,8 +65,11 @@ class GameBoard:
         elif row_name == "siege" and "Torrential Rain" in self.weather_zone:
             is_weathered = True
 
+        # Order of Operations Step 1 - weather overrides base power to 1.
         base_power = 1 if is_weathered else card_data["power"]
         row_list = self.players[player_id]["board"][row_name]
+
+        # Order of Operations Step 2 - add boosts.
         boost_count = sum(1 for c in row_list if CARDS[c].get("ability") == "boost")
 
         if card_data.get("ability") == "boost":
@@ -68,10 +77,12 @@ class GameBoard:
         else:
             base_power += boost_count
 
+        # Order of Operations Step 3 - tight bond multiplier.
         if card_data.get("ability") == "tight_bond":
             row_list = self.players[player_id]["board"][row_name]
             base_power *= row_list.count(card_name)
 
+        # Order of Operations Step 4 - commander's horn multiplier.
         has_physical_horn = row_name in self.players[player_id]["horns"]
         dandelion_present = "Dandelion" in self.players[player_id]["board"][row_name]
         row_horn_active = has_physical_horn or dandelion_present
@@ -114,6 +125,7 @@ class GameBoard:
         """Finds the highest power non-hero card(s) on the board and destroys them."""
         max_power = -1
 
+        # Iterate through every row of both players to find the absolute highest power number.
         for p in [1, 2]:
             for row_name, card_list in self.players[p]["board"].items():
                 for card_name in card_list:
@@ -122,6 +134,7 @@ class GameBoard:
                         if pwr > max_power:
                             max_power = pwr
 
+        # Iterate through the board again. If a card's power matches the max number, destroy it.
         if max_power > 0:
             for p in [1, 2]:
                 for row_name in self.players[p]["board"]:
@@ -138,45 +151,9 @@ class GameBoard:
     def get_score(self, player_id):
         """Calculates the current board score for a player, applying weather and horn rules."""
         score = 0
-
         for row_name, card_list in self.players[player_id]["board"].items():
-            is_weathered = False
-            if row_name == "melee" and "Biting Frost" in self.weather_zone:
-                is_weathered = True
-            elif row_name == "ranged" and "Impenetrable Fog" in self.weather_zone:
-                is_weathered = True
-            elif row_name == "siege" and "Torrential Rain" in self.weather_zone:
-                is_weathered = True
-
-            has_physical_horn = row_name in self.players[player_id]["horns"]
-            dandelion_present = "Dandelion" in card_list
-            row_horn_active = has_physical_horn or dandelion_present
-
-            boost_count = sum(1 for c in card_list if CARDS[c].get("ability") == "boost")
-
             for card_name in card_list:
-                card_data = CARDS[card_name]
-                is_hero = card_data.get("hero", False)
-
-                if is_weathered and not is_hero:
-                    card_power = 1
-                else:
-                    card_power = card_data["power"]
-
-                if not is_hero:
-                    if card_data.get("ability") == "boost":
-                        card_power += max(0, boost_count - 1)
-                    else:
-                        card_power += boost_count
-
-                if card_data.get("ability") == "tight_bond":
-                    card_power *= card_list.count(card_name)
-
-                if row_horn_active and not is_hero and card_name != "Dandelion":
-                    score += card_power * 2
-                else:
-                    score += card_power
-
+                score += self.get_card_power(player_id, card_name, row_name)
         return score
 
     def play_card(self, player_id, card_name, row, target_card=None):
@@ -231,10 +208,12 @@ class GameBoard:
             return True, f"Player {player_id} used a Decoy on {target_card}!"
 
         if CARDS[card_name].get("ability") == "medic":
+            # Filters the graveyard so you can't revive heroes, weather, or special cards.
             valid_targets = [c for c in self.players[player_id]["graveyard"]
                              if not CARDS[c].get("hero", False) and CARDS[c].get("row") not in ["weather", "special",
                                                                                                 "any"]]
 
+            # If there are targets, we pause the game loop and ask the client to pick one (REQ_CHAIN).
             if valid_targets and not target_card:
                 return True, f"REQ_CHAIN|{card_name}"
 
@@ -242,13 +221,16 @@ class GameBoard:
                 if target_card not in valid_targets:
                     return False, "Invalid graveyard target."
 
+                # Play the medic
                 self.players[player_id]["hand"].remove(card_name)
                 self.players[player_id]["board"][row].append(card_name)
 
+                # Move target from graveyard to hand
                 self.players[player_id]["graveyard"].remove(target_card)
                 self.players[player_id]["hand"].append(target_card)
                 target_row = CARDS[target_card]["row"]
 
+                # recursion. we call play_card() inside of play_card() to instantly play the revived card.
                 self.current_turn = player_id
                 success, inner_msg = self.play_card(player_id, target_card, target_row)
 

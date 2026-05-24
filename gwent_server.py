@@ -160,6 +160,8 @@ def handle_client(conn, player_id):
                         with game_lock:
                             success, msg = game.play_card(player_id, card_name, row, target_card)
                             if success:
+                                # Special check for the Medic card. If the logic returns REQ_CHAIN,
+                                # we pause the update and ask the client to pick a card from the graveyard.
                                 if msg.startswith("REQ_CHAIN|"):
                                     chained_card = msg.split('|')[1]
                                     secure_send(conn, f"REQ_CHAIN|{chained_card}", aes_key)
@@ -229,6 +231,8 @@ def handle_client(conn, player_id):
             if other_player in clients and other_player in client_keys:
                 try:
                     if decks_received == 2:
+                        # If a player disconnects mid game, we instantly award
+                        # 2 round wins to the remaining player so they get the victory screen
                         secure_send(clients[other_player], "MSG|Opponent disconnected! You win by forfeit.",
                                     client_keys[other_player])
                         secure_send(clients[other_player], f"RES|p{other_player}", client_keys[other_player])
@@ -286,6 +290,7 @@ def main():
         print(f"[SERVER] Connection received from {addr[0]}. Assigning Player {p_id}")
 
         thread = threading.Thread(target=handle_client, args=(conn, p_id))
+        # If we shut down the main server, this thread will automatically die with it instead of turning into a zombie.
         thread.daemon = True
         thread.start()
 

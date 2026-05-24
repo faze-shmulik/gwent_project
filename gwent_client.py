@@ -16,6 +16,7 @@ import sys
 
 HOST = '127.0.0.1'
 PORT = 12312
+# if IP entered from cmd then it's the target server
 if len(sys.argv) > 1:
     HOST = sys.argv[1]
 print(f"[CLIENT] Targeting server at {HOST}:{PORT}")
@@ -24,6 +25,7 @@ is_running = True
 is_muted = False
 current_track_index = 0
 playlist = ["assets/gwent_music1.mp3", "assets/gwent_music2.mp3", "assets/gwent_music3.mp3", "assets/gwent_music4.mp3"]
+# Creates a custom pygame event ID. We tell pygame to fire this event when a song ends so we know to play the next one.
 MUSIC_END = pygame.USEREVENT + 1
 my_rounds_won = 0
 opp_rounds_won = 0
@@ -38,7 +40,7 @@ login_status_msg = "Enter credentials to connect."
 my_player_id = None
 
 my_deck_selection = ["Geralt", "Ciri", "Vesemir", "Triss", "Yennefer", "Catapult", "Trebuchet", "Zoltan", "Keira",
-                     "Ballista", "Vernon Roche", "John Natalis"] # Now defaults to 12 cards!
+                     "Ballista", "Vernon Roche", "John Natalis"]
 my_hand = []
 
 current_board_state = None
@@ -82,6 +84,7 @@ def secure_send(sock, plaintext):
         pass
 
 def get_card_image(name, font):
+    # don't load the image if we already loaded it before.
     if name not in card_images:
         try:
             img = pygame.image.load(f"assets/{name}.png").convert_alpha()
@@ -93,6 +96,7 @@ def get_card_image(name, font):
                 img = pygame.transform.scale(img, (CARD_WIDTH, CARD_HEIGHT))
                 card_images[name] = img
             except FileNotFoundError:
+                # draw a grey box with the card's name if the file is missing
                 surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT))
                 surf.fill((180, 180, 180))
                 pygame.draw.rect(surf, (0, 0, 0), surf.get_rect(), 3)
@@ -103,36 +107,46 @@ def get_card_image(name, font):
 
 
 def draw_login_screen(screen, fonts):
+    # Background
     screen.fill((40, 40, 40))
 
+    # Title and Status Text
     title = fonts['title'].render("GWENT: SECURE LOGIN", True, (255, 215, 0))
     screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 150))
 
     status = fonts['main'].render(login_status_msg, True, (200, 200, 200))
     screen.blit(status, (WIDTH // 2 - status.get_width() // 2, 220))
 
+    # Username Input Box
     user_rect = pygame.Rect(WIDTH // 2 - 150, 300, 300, 40)
     user_color = (100, 100, 100) if active_input == "USER" else (50, 50, 50)
     pygame.draw.rect(screen, user_color, user_rect, border_radius=5)
+
+    # Blinking cursor
     user_display = login_user_text + ("|" if active_input == "USER" and time.time() % 1 > 0.5 else "")
     u_surf = fonts['main'].render("User: " + user_display, True, (255, 255, 255))
     screen.blit(u_surf, (user_rect.x + 10, user_rect.y + 5))
 
+    # Password Input Box
     pass_rect = pygame.Rect(WIDTH // 2 - 150, 360, 300, 40)
     pass_color = (100, 100, 100) if active_input == "PASS" else (50, 50, 50)
     pygame.draw.rect(screen, pass_color, pass_rect, border_radius=5)
+
+    # Asterisks for password hiding
     pass_display = ("*" * len(login_pass_text)) + ("|" if active_input == "PASS" and time.time() % 1 > 0.5 else "")
     p_surf = fonts['main'].render("Pass: " + pass_display, True, (255, 255, 255))
     screen.blit(p_surf, (pass_rect.x + 10, pass_rect.y + 5))
 
     can_submit = len(login_user_text.strip()) > 0 and len(login_pass_text.strip()) > 0
 
+    # Login Button
     login_btn = pygame.Rect(WIDTH // 2 - 150, 430, 140, 45)
     log_color = (50, 150, 255) if can_submit else (100, 100, 100)
     pygame.draw.rect(screen, log_color, login_btn, border_radius=5)
     l_txt = fonts['main'].render("Login", True, (255, 255, 255))
     screen.blit(l_txt, (login_btn.x + 40, login_btn.y + 8))
 
+    # Signup Button
     signup_btn = pygame.Rect(WIDTH // 2 + 10, 430, 140, 45)
     sig_color = (50, 200, 100) if can_submit else (100, 100, 100)
     pygame.draw.rect(screen, sig_color, signup_btn, border_radius=5)
@@ -143,25 +157,30 @@ def draw_login_screen(screen, fonts):
 
 
 def draw_chat_ui(screen, fonts):
+    # Main chat background box
     chat_bg = pygame.Rect(WIDTH - 350, 70, 330, 400)
     pygame.draw.rect(screen, (30, 30, 30), chat_bg, border_radius=10)
     pygame.draw.rect(screen, (200, 200, 200), chat_bg, 3, border_radius=10)
 
+    # Text Input Box at the bottom
     input_rect = pygame.Rect(chat_bg.x + 10, chat_bg.bottom - 40, chat_bg.width - 20, 30)
     input_color = (100, 100, 100) if chat_active else (50, 50, 50)
     pygame.draw.rect(screen, input_color, input_rect, border_radius=5)
 
+    # Blinking cursor
     chat_font = pygame.font.SysFont('Arial', 16)
     display_text = chat_input_text + ("|" if chat_active and time.time() % 1 > 0.5 else "")
     input_surface = chat_font.render(display_text, True, (255, 255, 255))
     screen.blit(input_surface, (input_rect.x + 5, input_rect.y + 5))
 
     y_offset = input_rect.y - 25
+
+    # Grab only the last 12 messages, and reverse them so we draw from bottom to top.
     for msg in reversed(chat_history[-12:]):
         color = (150, 200, 255) if msg.startswith("You") else (200, 200, 200)
         txt = chat_font.render(msg, True, color)
         screen.blit(txt, (chat_bg.x + 10, y_offset))
-        y_offset -= 25
+        y_offset -= 25  # Move up 25 pixels for the next older message
 
     return input_rect
 
@@ -169,11 +188,13 @@ def draw_chat_ui(screen, fonts):
 def draw_board(screen, fonts):
     screen.fill((101, 67, 33))
 
+    # Chat Button
     chat_btn_rect = pygame.Rect(WIDTH - 120, 20, 100, 40)
     pygame.draw.rect(screen, (50, 50, 50), chat_btn_rect, border_radius=5)
     chat_lbl = fonts['main'].render("CHAT", True, (255, 255, 255))
     screen.blit(chat_lbl, (chat_btn_rect.x + 20, chat_btn_rect.y + 5))
 
+    # Mute Button
     global is_muted
     mute_btn_rect = pygame.Rect(WIDTH - 120, 70, 100, 40)
     btn_color = (100, 100, 100) if is_muted else (50, 150, 50)
@@ -184,7 +205,9 @@ def draw_board(screen, fonts):
     text_y = mute_btn_rect.centery - mute_lbl.get_height() // 2
     screen.blit(mute_lbl, (text_x, text_y))
 
+    # Deck Builder
     if not current_board_state:
+        # Logout Button
         logout_btn_rect = pygame.Rect(WIDTH - 240, 20, 100, 40)
         pygame.draw.rect(screen, (180, 50, 50), logout_btn_rect, border_radius=5)
         logout_lbl = fonts['main'].render("LOGOUT", True, (255, 255, 255))
@@ -193,6 +216,7 @@ def draw_board(screen, fonts):
         id_text = fonts['main'].render(sys_message, True, (200, 200, 200))
         screen.blit(id_text, (20, 20))
 
+        # Center Divider Line
         pygame.draw.line(screen, (150, 100, 50), (WIDTH // 2, 80), (WIDTH // 2, HEIGHT - 100), 4)
 
         deck_title = fonts['title'].render(f"Your Deck ({len(my_deck_selection)} | Min: 12)", True, (255, 215, 0))
@@ -209,6 +233,7 @@ def draw_board(screen, fonts):
             for _ in range(limit - count_in_deck):
                 available_cards.append(card_name)
 
+        # Clipping window for scrolling menus
         screen.set_clip(pygame.Rect(0, 140, WIDTH, HEIGHT - 240))
 
         deck_rects = []
@@ -227,6 +252,7 @@ def draw_board(screen, fonts):
 
         screen.set_clip(None)
 
+        # Ready Button
         ready_rect = None
         if not i_am_ready:
             if len(my_deck_selection) >= 12:
@@ -265,6 +291,7 @@ def draw_board(screen, fonts):
     start_x = 200
     brown = (139, 69, 19)
 
+    # Draw Game Board Rows
     pygame.draw.rect(screen, brown, (start_x, 50, row_width, row_height), border_radius=5)
     pygame.draw.rect(screen, brown, (start_x, 140, row_width, row_height), border_radius=5)
     pygame.draw.rect(screen, brown, (start_x, 230, row_width, row_height), border_radius=5)
@@ -280,6 +307,7 @@ def draw_board(screen, fonts):
 
     boost_color = (180, 140, 0)
 
+    # Draw Boost Lines
     if check_boost(opp_board, 'siege'): pygame.draw.line(screen, boost_color, (start_x + 5, 50 + row_height - 3),
                                                          (start_x + row_width - 5, 50 + row_height - 3), 4)
     if check_boost(opp_board, 'ranged'): pygame.draw.line(screen, boost_color, (start_x + 5, 140 + row_height - 3),
@@ -299,6 +327,7 @@ def draw_board(screen, fonts):
     fog_active = "Impenetrable Fog" in weather_zone
     rain_active = "Torrential Rain" in weather_zone
 
+    # Draw Row Labels
     draw_row_label(screen, row_font, start_x, "Siege", 50, rain_active,
                    "siege" in opp_horns or "Dandelion" in opp_board['siege'])
     draw_row_label(screen, row_font, start_x, "Ranged", 140, fog_active,
@@ -313,6 +342,7 @@ def draw_board(screen, fonts):
     draw_row_label(screen, row_font, start_x, "Siege", 530, rain_active,
                    "siege" in my_horns or "Dandelion" in my_board['siege'])
 
+    # Draw Weather Cards
     for i, w_card in enumerate(weather_zone):
         img = get_card_image(w_card, fonts['main'])
         mini_img = pygame.transform.scale(img, (60, 90))
@@ -320,6 +350,7 @@ def draw_board(screen, fonts):
 
     right_center_x = 900
 
+    # Draw Scores
     opp_title = fonts['main'].render("Opponent", True, (255, 50, 50))
     screen.blit(opp_title, (right_center_x - opp_title.get_width() // 2, 160))
 
@@ -332,11 +363,14 @@ def draw_board(screen, fonts):
     p1_score_txt = fonts['title'].render(str(my_score), True, (50, 150, 255))
     screen.blit(p1_score_txt, (right_center_x - p1_score_txt.get_width() // 2, 470))
 
+    # Draw Crown Gems
     draw_gems(screen, 887, 135, opp_rounds_won)
     draw_gems(screen, 887, 520, my_rounds_won)
 
     sys_text = fonts['main'].render(sys_message, True, (255, 215, 0))
     screen.blit(sys_text, (20, 20))
+
+    # Draw Cards on the Board
     my_active_cards = []
     global selected_decoy
     draw_row_cards(screen, fonts, start_x, my_active_cards, selected_decoy, opp_board['siege'], 50, 'siege', False)
@@ -346,11 +380,13 @@ def draw_board(screen, fonts):
     draw_row_cards(screen, fonts, start_x, my_active_cards, selected_decoy, my_board['ranged'], 440, 'ranged', True)
     draw_row_cards(screen, fonts, start_x, my_active_cards, selected_decoy, my_board['siege'], 530, 'siege', True)
 
+    # Pass Button
     pass_rect = pygame.Rect(850, 350, 100, 50)
     pygame.draw.rect(screen, (200, 50, 50), pass_rect, border_radius=10)
     pass_txt = fonts['main'].render("PASS", True, (255, 255, 255))
     screen.blit(pass_txt, (pass_rect.x + 20, pass_rect.y + 10))
 
+    # Turn Indicator
     current_turn_num = current_board_state.get('turn', 1)
     is_my_turn = (current_turn_num == 1 and my_player_id == "p1") or (current_turn_num == 2 and my_player_id == "p2")
     if is_my_turn:
@@ -362,6 +398,7 @@ def draw_board(screen, fonts):
     turn_txt = fonts['main'].render(turn_msg, True, turn_color)
     screen.blit(turn_txt, (pass_rect.centerx - turn_txt.get_width() // 2, pass_rect.y - 30))
 
+    # Keep Hand Button
     keep_hand_rect = None
     if in_redraw_phase:
         dim_surf = pygame.Surface((WIDTH, HEIGHT))
@@ -377,6 +414,7 @@ def draw_board(screen, fonts):
         btn_txt = fonts['main'].render("KEEP HAND", True, (255, 255, 255))
         screen.blit(btn_txt, (keep_hand_rect.x + 35, keep_hand_rect.y + 10))
 
+    # Draw Player Hand
     hand_rects = []
     hand_y = 650
 
@@ -403,6 +441,7 @@ def draw_board(screen, fonts):
 
     chat_input_rect = draw_chat_ui(screen, fonts) if show_chat else None
 
+    # Game Over Overlay
     global game_over_text
     if game_over_text != "":
         overlay_font = pygame.font.SysFont('Arial', 120, bold=True)
@@ -432,6 +471,7 @@ def draw_board(screen, fonts):
         "siege": pygame.Rect(start_x, 530, row_width, row_height)
     }
 
+    # Medic Graveyard Overlay
     medic_grave_rects = []
     if selected_medic_card:
         dim_surf = pygame.Surface((WIDTH, HEIGHT))
@@ -596,6 +636,7 @@ def main():
     selected_medic_card = None
     is_chaining_medic = False
 
+    # Initialize Pygame and Audio Engine
     pygame.init()
     pygame.mixer.init()
     pygame.mixer.music.set_endevent(MUSIC_END)
@@ -606,6 +647,7 @@ def main():
     except Exception as e:
         print(f"Could not load music: {e}")
 
+    # Window Setup
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("Gwent Project (Secure Client)")
     clock = pygame.time.Clock()
@@ -639,17 +681,20 @@ def main():
         return
 
     while is_running:
-
+        # Draw Current Screen State
         if app_state == "LOGIN":
             u_rect, p_rect, log_btn, sig_btn = draw_login_screen(screen, fonts)
         else:
             ready_btn, pass_btn, hand_rects, chat_btn_rect, chat_input_rect, deck_rects, pool_rects, my_row_rects,\
                 my_active_cards, medic_grave_rects, keep_hand_rect = draw_board(screen, fonts)
 
+        # Process OS Events
         for event in pygame.event.get():
+            # Handle Window Close
             if event.type == pygame.QUIT:
                 is_running = False
 
+            # Handle Music Looping
             if event.type == MUSIC_END:
                 current_track_index = (current_track_index + 1) % len(playlist)
                 try:
@@ -658,9 +703,11 @@ def main():
                 except:
                     pass
 
+            # Handle Left Mouse Click
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = event.pos
 
+                # Login Screen Clicks
                 if app_state == "LOGIN":
                     if u_rect.collidepoint(mouse_pos):
                         active_input = "USER"
@@ -681,6 +728,7 @@ def main():
                             login_status_msg = "Creating account..."
                             secure_send(client_sock, f"REQ_AUTH|SIGNUP|{login_user_text}|{login_pass_text}")
 
+                # In-Game Clicks
                 elif app_state == "GAME":
                     mute_btn_rect = pygame.Rect(WIDTH - 120, 70, 100, 40)
                     if mute_btn_rect.collidepoint(mouse_pos):
@@ -691,6 +739,7 @@ def main():
                             pygame.mixer.music.set_volume(0.5)
                         continue
 
+                    # Handle Logout Button
                     if not current_board_state:
                         logout_btn_rect = pygame.Rect(WIDTH - 240, 20, 100, 40)
                         if logout_btn_rect.collidepoint(mouse_pos):
@@ -711,6 +760,7 @@ def main():
                             sys_message = "Waiting for server..."
                             continue
 
+                    # Handle Redraw Clicks
                     if in_redraw_phase:
                         if keep_hand_rect and keep_hand_rect.collidepoint(mouse_pos):
                             in_redraw_phase = False
@@ -725,6 +775,7 @@ def main():
                                     break
                         continue
 
+                    # Handle Chat Activation
                     if chat_btn_rect.collidepoint(mouse_pos):
                         show_chat = not show_chat
                     if chat_input_rect and chat_input_rect.collidepoint(mouse_pos):
@@ -733,6 +784,7 @@ def main():
                         chat_active = False
 
                     if not show_chat or (chat_input_rect and not chat_input_rect.collidepoint(mouse_pos)):
+                        # Deck Builder Selection Clicks
                         if 140 < mouse_pos[1] < HEIGHT - 100:
                             if pool_rects and not i_am_ready:
                                 for rect, card_name in pool_rects:
@@ -744,12 +796,16 @@ def main():
                                     if rect.collidepoint(mouse_pos):
                                         my_deck_selection.remove(card_name)
                                         break
+
+                        # Ready & Pass Buttons
                         if ready_btn and ready_btn.collidepoint(mouse_pos):
                             i_am_ready = True
                             deck_str = ",".join(my_deck_selection)
                             secure_send(client_sock, f"DECK|{deck_str}")
                         if pass_btn and pass_btn.collidepoint(mouse_pos):
                             secure_send(client_sock, "PASS|")
+
+                        # Handle Playing Commander's Horn
                         if selected_horn and my_row_rects:
                             clicked_row = False
                             for row_name, rect in my_row_rects.items():
@@ -762,6 +818,7 @@ def main():
                             if not clicked_row:
                                 selected_horn = False
 
+                        # Handle Playing Decoy
                         elif selected_decoy and my_active_cards:
                             clicked_card = False
                             for rect, target_name, row_name in my_active_cards:
@@ -774,7 +831,7 @@ def main():
                             if not clicked_card:
                                 selected_decoy = False
 
-
+                        # Handle Playing Medic
                         elif selected_medic_card and medic_grave_rects:
                             clicked = False
                             for rect, target_name in medic_grave_rects:
@@ -789,6 +846,7 @@ def main():
                                     clicked = True
                                     break
 
+                        # Playing Standard Cards from Hand
                         elif hand_rects:
                             for rect, card_name in hand_rects:
                                 if rect.collidepoint(mouse_pos):
@@ -820,6 +878,7 @@ def main():
                                         row = CARDS[card_name]["row"]
                                         secure_send(client_sock, f"PLAY|{card_name}|{row}")
 
+            # Handle Keyboard Typing
             if event.type == pygame.KEYDOWN:
                 if app_state == "LOGIN":
                     if event.key == pygame.K_TAB:
@@ -853,6 +912,7 @@ def main():
                         if len(chat_input_text) < 35:
                             chat_input_text += event.unicode
 
+            # Handle Mouse Scroll Wheel
             elif event.type == pygame.MOUSEWHEEL:
                 if app_state == "GAME" and not current_board_state and not i_am_ready:
                     mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -865,6 +925,7 @@ def main():
                         pool_scroll_y -= event.y * 30
                         pool_scroll_y = max(0, pool_scroll_y)
 
+        # Update display and cap at 60 FPS
         pygame.display.flip()
         clock.tick(60)
 

@@ -43,6 +43,7 @@ class UsersManager:
 
     def Save(self):
         try:
+            # pickle.dump serializes the python dictionary into a binary file to save to the hard drive.
             with open(self.file_name, "wb") as f:
                 pickle.dump(self.users, f)
         except Exception as e:
