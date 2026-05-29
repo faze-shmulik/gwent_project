@@ -52,7 +52,7 @@ def secure_send(conn, plaintext, key):
 
 def broadcast(message_string):
     """Encrypts and sends to all connected players."""
-    for player_id, conn in clients.items():
+    for player_id, conn in list(clients.items()):
         if player_id in client_keys:
             secure_send(conn, message_string, client_keys[player_id])
 
@@ -86,7 +86,7 @@ def handle_client(conn, player_id):
                 data = decrypt_msg(enc_data, aes_key)
 
                 if data.startswith("REQ_AUTH|"):
-                    parts = data.split('|')
+                    parts = data.split('|', 3)
                     action, username, password = parts[1], parts[2], parts[3]
                     if action == "LOGIN":
                         if user_manager.IsUserExist(username) and user_manager.IsPasswordOK(username, password):
@@ -174,7 +174,8 @@ def handle_client(conn, player_id):
                             else:
                                 secure_send(conn, f"ERR|{msg}", aes_key)
 
-                    except ValueError:
+
+                    except (ValueError, IndexError):
                         secure_send(conn, "ERR|Invalid PLAY format.", aes_key)
 
                 elif opcode == "PASS":
@@ -212,8 +213,8 @@ def handle_client(conn, player_id):
                                 send_update()
                             else:
                                 secure_send(conn, f"ERR|{msg}", aes_key)
-                    except ValueError:
-                        pass
+                    except (ValueError, IndexError):
+                        secure_send(conn, "ERR|Invalid EXEC_CHAIN format.", aes_key)
 
                 elif opcode == "CHAT":
                     other_player = 2 if player_id == 1 else 1

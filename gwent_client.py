@@ -643,6 +643,8 @@ def main():
 
     # Initialize Pygame and Audio Engine
     pygame.init()
+    # Allows to hold keys
+    pygame.key.set_repeat(400, 50)
     pygame.mixer.init()
     pygame.mixer.music.set_endevent(MUSIC_END)
     try:
@@ -662,8 +664,10 @@ def main():
     }
 
     client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_sock.settimeout(3.0)
     try:
         client_sock.connect((HOST, PORT))
+        client_sock.settimeout(None)
 
         print("[CLIENT] Starting RSA Handshake...")
         send_with_size(client_sock, "RSA|REQPUB")
@@ -680,10 +684,23 @@ def main():
         listen_thread = threading.Thread(target=listen_to_server, args=(client_sock,))
         listen_thread.start()
 
-    except ConnectionRefusedError:
-        print("Could not connect to server.")
+    except socket.timeout:
+        print(f"\n[ERROR] Connection Timed Out! No server found at {HOST}:{PORT}.")
         pygame.quit()
-        return
+        sys.exit()
+    except ConnectionRefusedError:
+        print(f"\n[ERROR] Connection Refused! The server at {HOST} is offline.")
+        print("Please start 'gwent_server.py' first, or check the IP address.")
+        pygame.quit()
+        sys.exit()
+    except socket.gaierror:
+        print(f"\n[ERROR] Invalid IP Address: '{HOST}' is not a valid address.")
+        pygame.quit()
+        sys.exit()
+    except Exception as e:
+        print(f"\n[ERROR] Could not connect: {e}")
+        pygame.quit()
+        sys.exit()
 
     while is_running:
         # Draw Current Screen State
