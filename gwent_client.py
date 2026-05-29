@@ -552,8 +552,10 @@ def listen_to_server(sock):
         while is_running:
             enc_data = recv_by_size(sock, return_type="bytes")
             if not enc_data:
-                sys_message = "Server closed connection."
-                break
+                if not enc_data:
+                    print("\n[CLIENT] Server connection lost. Shutting down...")
+                    is_running = False
+                    break
 
             data = decrypt_msg(enc_data, aes_key)
             parts = data.split('|', 1)
@@ -626,8 +628,8 @@ def listen_to_server(sock):
 
     except Exception as e:
         if is_running:
-            sys_message = f"Connection error: {e}"
-            login_status_msg = f"Connection error: {e}"
+            print(f"\n[CLIENT] Connection error: {e}. Shutting down...")
+            is_running = False
 
 
 def main():
