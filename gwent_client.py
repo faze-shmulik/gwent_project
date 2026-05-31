@@ -39,13 +39,14 @@ login_status_msg = "Enter credentials to connect."
 
 my_player_id = None
 
-my_deck_selection = [
+DEFAULT_DECK = [
     "Mysterious Elf", "Sigismund Dijkstra",
     "Yennefer", "Dun Banner Medic",
     "Commander's Horn", "Commander's Horn",
     "Catapult", "Catapult",
     "Decoy", "Geralt", "Ciri", "Zoltan"
 ]
+my_deck_selection = DEFAULT_DECK.copy()
 my_hand = []
 
 current_board_state = None
@@ -770,9 +771,7 @@ def main():
                             secure_send(client_sock, "REQ_LOGOUT|")
                             app_state = "LOGIN"
                             i_am_ready = False
-                            my_deck_selection = ["Geralt", "Ciri", "Vesemir", "Triss", "Yennefer", "Catapult",
-                                                "Trebuchet",
-                                                "Zoltan", "Keira", "Ballista"]
+                            my_deck_selection = DEFAULT_DECK.copy()
                             current_board_state = None
                             global my_rounds_won, opp_rounds_won, game_over_text, chat_history, show_chat
                             my_rounds_won = 0

@@ -21,7 +21,7 @@ class GameBoard:
         """Wipes a player's state so they can log back in fresh."""
         self.players[player_id] = {
             "deck": [], "hand": [], "board": {"melee": [], "ranged": [], "siege": []},
-            "passed": False, "rounds_won": 0, "horns": [], "graveyard": []
+            "passed": False, "rounds_won": 0, "horns": [], "graveyard": [], "redraws_left": 2
         }
 
     def redraw_card(self, player_id, card_name):
